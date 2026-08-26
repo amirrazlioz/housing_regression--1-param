@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>חיזוי מחירי דירות</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { margin-bottom: 5px; color: #1a365d; }
+        p.subtitle { margin-top: 0; color: #4a5568; margin-bottom: 15px; }
+
+        /* סרגל שלבים */
+        .stepper {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            max-width: 1050px;
+            width: 100%;
+        }
+        .step-btn {
+            flex: 1;
+            padding: 14px;
+            border: 2px solid #cbd5e0;
+            background: white;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1.05em;
+            color: #718096;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        .step-btn.active {
+            border-color: #3182ce;
+            background: #ebf8ff;
+            color: #2b6cb0;
+            box-shadow: 0 4px 10px rgba(49, 130, 206, 0.15);
+        }
+        .step-number {
+            background: #cbd5e0;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+        }
+        .step-btn.active .step-number {
+            background: #3182ce;
+        }
+
+        .container { display: flex; flex-wrap: wrap; gap: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 1050px; width: 100%; }
+        .canvas-container { flex: 1.1; min-width: 320px; position: relative; }
+        canvas { background: #fafafa; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; }
+        .controls { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px; }
+        
+        .card { background: #edf2f7; padding: 15px; border-radius: 8px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #2d3748; }
+        input[type=range] { width: 100%; cursor: pointer; }
+        .val-display { font-weight: bold; color: #2b6cb0; }
+        
+        .metrics { background: #ebf8ff; border-right: 4px solid #3182ce; padding: 15px; border-radius: 8px; }
+        .metrics div { font-size: 1.05em; margin-bottom: 6px; }
+
+        /* כרטיסיית שלב 2 - חיזוי */
+        .prediction-box {
+            background: #f0fff4;
+            border: 2px solid #38a169;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .prediction-box h3 {
+            margin: 0 0 10px 0;
+            color: #276749;
+            font-size: 1.1em;
+        }
+        .prediction-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .prediction-inputs input[type=number] {
+            width: 90px;
+            padding: 8px;
+            font-size: 1em;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .prediction-result {
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #22543d;
+            background: #dcffe4;
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 5px; flex-wrap: wrap; }
+        button { flex: 1; min-width: 120px; padding: 10px 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .btn-primary { background: #3182ce; color: white; }
+        .btn-primary:hover { background: #2b6cb0; }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-secondary:hover { background: #cbd5e0; }
+        .btn-danger { background: #e53e3e; color: white; }
+        .btn-danger:hover { background: #c53030; }
+        .btn-success { background: #38a169; color: white; }
+        .btn-success:hover { background: #2f855a; }
+        .btn-disabled { background: #cbd5e0 !important; color: #a0aec0 !important; cursor: not-allowed !important; }
+
+        .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal; }
+        .instructions { font-size: 0.9em; color: #4a5568; background: #fffaf0; border-right: 4px solid #dd6b20; padding: 12px; border-radius: 6px; line-height: 1.4; }
+        
+        .point-count-badge {
+            background: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #2d3748;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>חיזוי מחירי דירות</h1>
+    <p class="subtitle">חקר מחירי דירות (במיליוני ש"ח) מול שטח דירה (מ"ר)</p>
+
+    <!-- סרגל ניווט בשלבים -->
+    <div class="stepper">
+        <button class="step-btn active" id="btnStep1" onclick="setStep(1)">
+            <span class="step-number">1</span>
+            שלב 1: הוספת נתונים ובניית קו הרגרסיה
+        </button>
+        <button class="step-btn" id="btnStep2" onclick="setStep(2)">
+            <span class="step-number">2</span>
+            שלב 2: הוספת/מחיקת נקודות, עדכון הקו וחיזוי
+        </button>
+    </div>
+
+    <div class="container">
+        <div class="canvas-container">
+            <canvas id="plotCanvas" width="500" height="440"></canvas>
+        </div>
+
+        <div class="controls">
+            
+            <!-- הנחיות משתנות לפי שלב -->
+            <div class="instructions" id="instructionsBox">
+                📍 <b>הנחיות לשלב 1:</b><br>
+                1. הקליקו על הגרף כדי להוסיף לפחות 2 נקודות (דירות).<br>
+                2. לחצו על כפתור הנקודה על הגרף כדי למחוק אותה אם יש צורך.<br>
+                3. לחצו על הכפתור <b>"צור קו רגרסיה"</b> כדי לחשב ולצייר את הקו.
+            </div>
+
+            <!-- בקרות שלב 1: הזנת נתונים ויצירת קו -->
+            <div id="step1Controls">
+                <div class="point-count-badge" id="pointCountDisplay">נקודות שנאספו: 0 (נדרשות לפחות 2)</div>
+
+                <div style="margin-bottom: 12px;">
+                    <button class="btn-primary" id="buildLineBtn" style="width: 100%; padding: 12px; font-size: 1.05em;" onclick="generateRegressionLine()">📐 צור קו רגרסיה (Best Fit)</button>
+                </div>
+
+                <div id="manualSlidersBox" style="display: none;">
+                    <div class="card" style="margin-bottom: 12px;">
+                        <label>שיפוע ($m$ - תוספת מחיר לכל מ"ר): <span id="mVal" class="val-display">0.02</span> מיליון ש"ח</label>
+                        <input type="range" id="mSlider" min="-0.02" max="0.08" step="0.001" value="0.02">
+                    </div>
+
+                    <div class="card" style="margin-bottom: 12px;">
+                        <label>חיתוך ($b$ - מחיר בסיס לדירה): <span id="bVal" class="val-display">0.50</span> מיליון ש"ח</label>
+                        <input type="range" id="bSlider" min="-1" max="3" step="0.05" value="0.5">
+                    </div>
+
+                    <div class="card" style="margin-bottom: 12px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showResiduals" checked>
+                            הצג מרחקי שגיאה (Residuals / שאריות)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn-danger" onclick="removeLastPoint()">🗑️ מחק נקודה אחרונה</button>
+                    <button class="btn-secondary" onclick="resetAll()">נקה הכל</button>
+                </div>
+            </div>
+
+            <!-- בקרות שלב 2: חיזוי ועדכון הקו -->
+            <div id="step2Controls" style="display: none;">
+                <div class="prediction-box">
+                    <h3>🔮 מחשב חיזוי מחיר דירה</h3>
+                    <div class="prediction-inputs">
+                        <label style="margin:0; font-weight:normal;">שטח דירה (מ"ר) לדירה החדשה:</label>
+                        <input type="number" id="predictArea" min="0" max="150" step="5" value="80">
+                    </div>
+                    <div class="prediction-result" id="predictionOutput">
+                        מחיר חיזוי: -- מיליון ש"ח
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                    <button class="btn-success" style="width:100%; padding: 12px;" onclick="addPredictedPoint()">➕ הוסף דירה זו לפי החיזוי</button>
+                    <button class="btn-primary" style="width:100%; padding: 10px;" onclick="recalculateRegressionLine()">🔄 עדכן קו רגרסיה לפי הנקודות החדשות</button>
+                </div>
+
+                <div class="card" style="margin-top: 10px;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoUpdateLine" checked>
+                        עדכן קו רגרסיה אוטומטית בעת שינוי נקודות
+                    </label>
+                </div>
+
+                <div class="btn-group" style="margin-top: 10px;">
+                    <button class="btn-danger" style="width:100%;" onclick="removeLastPoint()">🗑️ מחק נקודה אחרונה</button>
+                </div>
+            </div>
+
+            <!-- מדדי ביצוע (משותף לשני השלבים) -->
+            <div class="metrics">
+                <div>משוואת הישר: <b><span id="eqDisplay">אין קו רגרסיה עדיין</span></b></div>
+                <div>שגיאת ריבוע ממוצעת (MSE): <b><span id="mseDisplay">--</span></b></div>
+            </div>
+
+            <div class="btn-group" id="stepNavigation">
+                <button class="btn-primary btn-disabled" id="nextStepBtn" disabled onclick="setStep(2)">עבור לשלב 2: הוספת נקודות וחיזוי ←</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('plotCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentStep = 1;
+        let points = []; 
+        let lineCreated = false;
+        let hoveredPointIndex = -1;
+
+        const xMin = 0, xMax = 150;
+        const yMin = 0, yMax = 4;
+
+        function toCanvasX(x) { return 45 + (x - xMin) / (xMax - xMin) * (canvas.width - 65); }
+        function toCanvasY(y) { return (canvas.height - 40) - (y - yMin) / (yMax - yMin) * (canvas.height - 60); }
+        function toDataX(cx) { return xMin + (cx - 45) / (canvas.width - 65) * (xMax - xMin); }
+        function toDataY(cy) { return yMin + ((canvas.height - 40) - cy) / (canvas.height - 60) * (yMax - yMin); }
+
+        function setStep(step) {
+            if (step === 2 && !lineCreated) return;
+
+            currentStep = step;
+            
+            document.getElementById('btnStep1').classList.toggle('active', step === 1);
+            document.getElementById('btnStep2').classList.toggle('active', step === 2);
+
+            document.getElementById('step1Controls').style.display = (step === 1) ? 'block' : 'none';
+            document.getElementById('step2Controls').style.display = (step === 2) ? 'block' : 'none';
+            
+            if (step === 1) {
+                document.getElementById('instructionsBox').innerHTML = `
+                    📍 <b>הנחיות לשלב 1:</b><br>
+                    1. הקליקו על הגרף להוספת נקודות. <b>לחצו על נקודה קיימת למחיקתה.</b><br>
+                    2. לחצו על הכפתור <b>"צור קו רגרסיה"</b> כדי לחשב ולצייר את הקו.<br>
+                    3. כוונו את הקו במידת הצורך בעזרת הסליידרים.
+                `;
+                document.getElementById('stepNavigation').innerHTML = `
+                    <button class="btn-primary ${lineCreated ? '' : 'btn-disabled'}" id="nextStepBtn" ${lineCreated ? '' : 'disabled'} onclick="setStep(2)">עבור לשלב 2: הוספת נקודות וחיזוי ←</button>
+                `;
+            } else {
+                document.getElementById('instructionsBox').innerHTML = `
+                    📍 <b>הנחיות לשלב 2:</b><br>
+                    1. <b>לחצו על הגרף</b> כדי להוסיף נקודות חדשות. <b>לחצו על נקודה קיימת כדי למחוק אותה.</b><br>
+                    2. עקבו אחר השינוי בקו הרגרסיה ובחיזוי.<br>
+                    3. הזינו שטח דירה במ"ר לבדיקת חיזוי מעודכן!
+                `;
+                document.getElementById('stepNavigation').innerHTML = `
+                    <button class="btn-secondary" onclick="setStep(1)">→ חזור לשלב 1: עריכת הנתונים והקו</button>
+                `;
+            }
+
+            render();
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+
+            for (let y = yMin; y <= yMax; y += 0.5) {
+                let cy = toCanvasY(y);
+                ctx.beginPath();
+                ctx.moveTo(45, cy);
+                ctx.lineTo(canvas.width - 20, cy);
+                ctx.stroke();
+                ctx.fillStyle = '#718096';
+                ctx.font = '11px sans-serif';
+                ctx.fillText(y.toFixed(1), 10, cy + 4);
+            }
+
+            for (let x = xMin; x <= xMax; x += 25) {
+                let cx = toCanvasX(x);
+                ctx.beginPath();
+                ctx.moveTo(cx, 20);
+                ctx.lineTo(cx, canvas.height - 40);
+                ctx.stroke();
+                ctx.fillStyle = '#718096';
+                ctx.fillText(x, cx - 8, canvas.height - 20);
+            }
+
+            ctx.strokeStyle = '#4a5568';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(45, 20);
+            ctx.lineTo(45, canvas.height - 40);
+            ctx.lineTo(canvas.width - 20, canvas.height - 40);
+            ctx.stroke();
+
+            ctx.fillStyle = '#1a365d';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('שטח דירה (מ"ר)', canvas.width / 2 - 40, canvas.height - 5);
+            
+            ctx.save();
+            ctx.translate(15, canvas.height / 2 + 30);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('מחיר (מיליוני ש"ח)', 0, 0);
+            ctx.restore();
+        }
+
+        function generateRegressionLine() {
+            if (points.length < 2) return;
+            recalculateRegressionLine();
+            lineCreated = true;
+            document.getElementById('manualSlidersBox').style.display = 'block';
+            
+            let nextBtn = document.getElementById('nextStepBtn');
+            if (nextBtn) {
+                nextBtn.classList.remove('btn-disabled');
+                nextBtn.disabled = false;
+            }
+
+            render();
+        }
+
+        function recalculateRegressionLine() {
+            if (points.length < 2) {
+                render();
+                return;
+            }
+
+            let n = points.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            points.forEach(pt => {
+                sumX += pt.x;
+                sumY += pt.y;
+                sumXY += pt.x * pt.y;
+                sumXX += pt.x * pt.x;
+            });
+
+            let denom = (n * sumXX - sumX * sumX);
+            let mOpt = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+            let bOpt = (sumY - mOpt * sumX) / n;
+
+            document.getElementById('mSlider').value = mOpt;
+            document.getElementById('bSlider').value = bOpt;
+            render();
+        }
+
+        function removeLastPoint() {
+            if (points.length > 0) {
+                points.pop();
+                onPointsChanged();
+            }
+        }
+
+        function onPointsChanged() {
+            if (points.length < 2) {
+                let nextBtn = document.getElementById('nextStepBtn');
+                if (nextBtn) {
+                    nextBtn.classList.add('btn-disabled');
+                    nextBtn.disabled = true;
+                }
+            }
+            if (lineCreated) {
+                const autoUpdate = document.getElementById('autoUpdateLine') ? document.getElementById('autoUpdateLine').checked : true;
+                if (autoUpdate) {
+                    recalculateRegressionLine();
+                } else {
+                    render();
+                }
+            } else {
+                render();
+            }
+        }
+
+        function render() {
+            drawGrid();
+
+            const countDisplay = document.getElementById('pointCountDisplay');
+            countDisplay.innerText = `נקודות שנאספו: ${points.length} (נדרשות לפחות 2)`;
+            if (points.length >= 2) {
+                countDisplay.style.background = '#c6f6d5';
+                countDisplay.style.color = '#22543d';
+            } else {
+                countDisplay.style.background = '#e2e8f0';
+                countDisplay.style.color = '#2d3748';
+            }
+
+            points.forEach((pt, idx) => {
+                ctx.fillStyle = (idx === hoveredPointIndex) ? '#e53e3e' : '#2b6cb0';
+                ctx.beginPath();
+                ctx.arc(toCanvasX(pt.x), toCanvasY(pt.y), idx === hoveredPointIndex ? 8 : 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+
+            if (!lineCreated || points.length < 2) {
+                document.getElementById('eqDisplay').innerText = points.length < 2 ? 'נדרשות לפחות 2 נקודות' : 'אין קו רגרסיה עדיין';
+                document.getElementById('mseDisplay').innerText = '--';
+                return;
+            }
+
+            const m = parseFloat(document.getElementById('mSlider').value);
+            const b = parseFloat(document.getElementById('bSlider').value);
+            const showResiduals = document.getElementById('showResiduals') ? document.getElementById('showResiduals').checked : false;
+
+            document.getElementById('mVal').innerText = m.toFixed(3);
+            document.getElementById('bVal').innerText = b.toFixed(2);
+            
+            let sign = b >= 0 ? '+' : '-';
+            document.getElementById('eqDisplay').innerText = `Y = ${m.toFixed(3)}X ${sign} ${Math.abs(b).toFixed(2)}`;
+
+            let totalSquaredError = 0;
+
+            points.forEach(pt => {
+                let yPred = m * pt.x + b;
+                let error = pt.y - yPred;
+                totalSquaredError += error * error;
+
+                if (showResiduals && currentStep === 1) {
+                    ctx.strokeStyle = '#e53e3e';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(toCanvasX(pt.x), toCanvasY(pt.y));
+                    ctx.lineTo(toCanvasX(pt.x), toCanvasY(yPred));
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+
+            let mse = points.length > 0 ? totalSquaredError / points.length : 0;
+            document.getElementById('mseDisplay').innerText = mse.toFixed(3);
+
+            ctx.strokeStyle = '#3182ce';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(toCanvasX(xMin), toCanvasY(m * xMin + b));
+            ctx.lineTo(toCanvasX(xMax), toCanvasY(m * xMax + b));
+            ctx.stroke();
+
+            if (currentStep === 2) {
+                const predX = parseFloat(document.getElementById('predictArea').value);
+
+                if (!isNaN(predX)) {
+                    let predY = m * predX + b;
+                    
+                    document.getElementById('predictionOutput').innerText = `מחיר חיזוי: ${predY.toFixed(3)} מיליון ש"ח`;
+
+                    if (predX >= xMin && predX <= xMax) {
+                        ctx.strokeStyle = '#38a169';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 6]);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(toCanvasX(predX), toCanvasY(yMin));
+                        ctx.lineTo(toCanvasX(predX), toCanvasY(predY));
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(toCanvasX(predX), toCanvasY(predY));
+                        ctx.lineTo(toCanvasX(xMin), toCanvasY(predY));
+                        ctx.stroke();
+
+                        ctx.setLineDash([]);
+
+                        ctx.fillStyle = '#38a169';
+                        ctx.beginPath();
+                        ctx.arc(toCanvasX(predX), toCanvasY(predY), 8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                } else {
+                    document.getElementById('predictionOutput').innerText = 'נא להזין שטח דירה תקין במ"ר';
+                }
+            }
+        }
+
+        function resetAll() {
+            points = [];
+            lineCreated = false;
+            document.getElementById('manualSlidersBox').style.display = 'none';
+            
+            let nextBtn = document.getElementById('nextStepBtn');
+            if (nextBtn) {
+                nextBtn.classList.add('btn-disabled');
+                nextBtn.disabled = true;
+            }
+
+            setStep(1);
+            render();
+        }
+
+        function addPredictedPoint() {
+            if (!lineCreated) return;
+            const predX = parseFloat(document.getElementById('predictArea').value);
+            const m = parseFloat(document.getElementById('mSlider').value);
+            const b = parseFloat(document.getElementById('bSlider').value);
+            if (!isNaN(predX)) {
+                let predY = m * predX + b;
+                points.push({ x: predX, y: parseFloat(predY.toFixed(2)) });
+                onPointsChanged();
+            }
+        }
+
+        function getPointAtPosition(cx, cy) {
+            const threshold = 10;
+            return points.findIndex(pt => {
+                let px = toCanvasX(pt.x);
+                let py = toCanvasY(pt.y);
+                return Math.hypot(px - cx, py - cy) < threshold;
+            });
+        }
+
+        canvas.addEventListener('mousemove', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            let cx = e.clientX - rect.left;
+            let cy = e.clientY - rect.top;
+
+            let prevHover = hoveredPointIndex;
+            hoveredPointIndex = getPointAtPosition(cx, cy);
+
+            if (hoveredPointIndex !== -1) {
+                canvas.style.cursor = 'pointer';
+            } else {
+                canvas.style.cursor = 'crosshair';
+            }
+
+            if (prevHover !== hoveredPointIndex) {
+                render();
+            }
+        });
+
+        canvas.addEventListener('click', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            let cx = e.clientX - rect.left;
+            let cy = e.clientY - rect.top;
+
+            let clickedIdx = getPointAtPosition(cx, cy);
+
+            if (clickedIdx !== -1) {
+                points.splice(clickedIdx, 1);
+                hoveredPointIndex = -1;
+                onPointsChanged();
+            } else {
+                let x = toDataX(cx);
+                let y = toDataY(cy);
+
+                if (x >= xMin && x <= xMax && y >= yMin && y <= yMax) {
+                    points.push({ x: parseFloat(x.toFixed(1)), y: parseFloat(y.toFixed(2)) });
+                    onPointsChanged();
+                }
+            }
+        });
+
+        document.getElementById('mSlider').addEventListener('input', render);
+        document.getElementById('bSlider').addEventListener('input', render);
+        document.getElementById('showResiduals').addEventListener('change', render);
+        document.getElementById('predictArea').addEventListener('input', render);
+
+        render();
+    </script>
+</body>
+</html>
